@@ -16,6 +16,7 @@ __all__ = (
     "ConvTranspose",
     "Focus",
     "GhostConv",
+    "PConv",
     "ChannelAttention",
     "SpatialAttention",
     "CBAM",
@@ -170,6 +171,43 @@ class GhostConv(nn.Module):
         """Forward propagation through a Ghost Bottleneck layer with skip connection."""
         y = self.cv1(x)
         return torch.cat((y, self.cv2(y)), 1)
+
+
+class PConv(nn.Module):
+    """
+    Partial convolution with args(ch_in, ch_out, kernel).
+    Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
+    https://arxiv.org/pdf/2303.03667.pdf
+    """
+    # c1, c2, k=1, s=1, d=1, act=True
+    def __init__(self, c1, c2, k=1, s=1, d=1, act=True, n_div=4, forward='split_cat'):
+        super().__init__()
+        self.dim_conv3 = c1 // n_div
+        self.dim_untouched = c1 - self.dim_conv3
+        self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False)
+        self.conv = Conv(c1, c2, k=1, act=act)
+
+        if forward == 'slicing':
+            self.forward = self.forward_slicing
+        elif forward == 'split_cat':
+            self.forward = self.forward_split_cat
+        else:
+            raise NotImplementedError
+
+    def forward_slicing(self, x):
+        # only for inference
+        x = x.clone()   # !!! Keep the original input intact for the residual connection later
+        x[:, :self.dim_conv3, :, :] = self.partial_conv3(x[:, :self.dim_conv3, :, :])
+        x = self.conv(x)
+        return x
+
+    def forward_split_cat(self, x):
+        # for training/inference
+        x1, x2 = torch.split(x, [self.dim_conv3, self.dim_untouched], dim=1)
+        x1 = self.partial_conv3(x1)
+        x = torch.cat((x1, x2), 1)
+        x = self.conv(x)
+        return x
 
 
 class RepConv(nn.Module):

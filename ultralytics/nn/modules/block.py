@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -21,6 +21,7 @@ __all__ = (
     "C3x",
     "C3TR",
     "C3Ghost",
+    "C3Faster",
     "GhostBottleneck",
     "Bottleneck",
     "BottleneckCSP",
@@ -292,6 +293,16 @@ class C3Ghost(C3):
         self.m = nn.Sequential(*(GhostBottleneck(c_, c_) for _ in range(n)))
 
 
+class C3Faster(C3):
+    """C3 module with GhostBottleneck()."""
+
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        """Initialize 'SPP' module with various pooling sizes for spatial pyramid pooling."""
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)  # hidden channels
+        self.m = nn.Sequential(*(FasterNetBlock(c_, c_) for _ in range(n)))
+
+
 class GhostBottleneck(nn.Module):
     """Ghost Bottleneck https://github.com/huawei-noah/ghostnet."""
 
@@ -312,6 +323,25 @@ class GhostBottleneck(nn.Module):
         """Applies skip connection and concatenation to input tensor."""
         return self.conv(x) + self.shortcut(x)
 
+class FasterNetBlock(nn.Module):    
+    """FasterNet Block"""
+
+    def __init__(self, c1, c2, k=3, s=1):
+        """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
+        super().__init__()
+        c_ = c2 // 2
+        self.conv = nn.Sequential(
+            PConv(c1, c_, 1, 1),  # pw
+            DWConv(c_, c_, k, s, act=False) if s == 2 else nn.Identity(),  # dw
+            PConv(c_, c2, 1, 1, act=False),  # pw-linear
+        )
+        self.shortcut = (
+            nn.Sequential(DWConv(c1, c1, k, s, act=False), Conv(c1, c2, 1, 1, act=False)) if s == 2 else nn.Identity()
+        )
+
+    def forward(self, x):
+        """Applies skip connection and concatenation to input tensor."""
+        return self.conv(x) + self.shortcut(x)
 
 class Bottleneck(nn.Module):
     """Standard bottleneck."""
