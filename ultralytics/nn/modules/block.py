@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv3
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -326,17 +326,18 @@ class GhostBottleneck(nn.Module):
 class FasterNetBlock(nn.Module):    
     """FasterNet Block"""
 
-    def __init__(self, c1, c2, k=3, s=1):
+    def __init__(self, c1, c2, k=1, s=1):
         """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
         super().__init__()
-        c_ = c2 // 2
         self.conv = nn.Sequential(
-            PConv(c1, c_, 1, 1),  # pw
-            DWConv(c_, c_, k, s, act=False) if s == 2 else nn.Identity(),  # dw
-            PConv(c_, c2, 1, 1, act=False),  # pw-linear
+            PConv3(c1, n_div=4),
+            nn.Conv2d(c1, c2, k, s, 0, bias=False),
+            nn.BatchNorm2d(c2),
+            nn.ReLU(),
+            nn.Conv2d(c2, c2, k, 1, 0, bias=False),
         )
         self.shortcut = (
-            nn.Sequential(DWConv(c1, c1, k, s, act=False), Conv(c1, c2, 1, 1, act=False)) if s == 2 else nn.Identity()
+            nn.Sequential(nn.Conv2d(c1, c2, 1, 1, bias=False)) if s == 2 else nn.Identity()
         )
 
     def forward(self, x):

@@ -16,7 +16,7 @@ __all__ = (
     "ConvTranspose",
     "Focus",
     "GhostConv",
-    "PConv",
+    "PConv3",
     "ChannelAttention",
     "SpatialAttention",
     "CBAM",
@@ -179,17 +179,13 @@ class PConv(nn.Module):
     Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
     https://arxiv.org/pdf/2303.03667.pdf
     """
-    default_act = nn.ReLU()  # default activation
-
-    def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True, n_div=4, forward="split_cat"):
+    def __init__(self, c1, c2, k=3, s=1, n_div=4, g=1, act=True, forward="split_cat"):
         """Initialize Conv layer with given arguments including activation."""
         super().__init__()
         self.dim_conv = c1 // n_div
         self.dim_untouched = c1 - self.dim_conv
-        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, k, 1, autopad(k, p, d), groups=g, dilation=d, bias=False)
-        self.cv2 = nn.Conv2d(c1, c2, 1, s, 0, groups=g, dilation=d, bias=False)
-        self.bn = nn.BatchNorm2d(c2)
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, k, 1, 1, groups=g,bias=False)
+        self.cv2 = Conv(c1, c2, 1, s, act=act)
 
         if forward == 'slicing':
             self.forward = self.forward_slicing
@@ -203,14 +199,51 @@ class PConv(nn.Module):
         x = x.clone()   # !!! Keep the original input intact for the residual connection later
         x[:, :self.dim_conv, :, :] = self.cv1(x[:, :self.dim_conv, :, :])
 
-        return self.act(self.bn(self.cv2(x)))
+        return self.cv2(x)
 
     def forward_split_cat(self, x):
         # for training/inference
         x1, x2 = torch.split(x, [self.dim_conv, self.dim_untouched], dim=1)
         x1 = self.cv1(x1)
         x = torch.cat((x1, x2), 1)
-        return self.act(self.bn(self.cv2(x)))
+        return self.cv2(x)
+
+
+class PConv3(nn.Module):
+    """
+    Partial convolution with args(ch_in, ch_out, kernel).
+    Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
+    https://arxiv.org/pdf/2303.03667.pdf
+    """
+    default_act = nn.ReLU()  # default activation
+
+    def __init__(self, c1, n_div=4, forward="split_cat"):
+        """Initialize Conv layer with given arguments including activation."""
+        super().__init__()
+        self.dim_conv = c1 // n_div
+        self.dim_untouched = c1 - self.dim_conv
+        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, 3, 1, 1,bias=False)
+
+        if forward == 'slicing':
+            self.forward = self.forward_slicing
+        elif forward == 'split_cat':
+            self.forward = self.forward_split_cat
+        else:
+            raise NotImplementedError
+
+    def forward_slicing(self):
+        # only for inference
+        x = x.clone()   # !!! Keep the original input intact for the residual connection later
+        x[:, :self.dim_conv, :, :] = self.cv1(x[:, :self.dim_conv, :, :])
+
+        return x
+
+    def forward_split_cat(self, x):
+        # for training/inference
+        x1, x2 = torch.split(x, [self.dim_conv, self.dim_untouched], dim=1)
+        x1 = self.cv1(x1)
+        x = torch.cat((x1, x2), 1)
+        return x
 
 
 
