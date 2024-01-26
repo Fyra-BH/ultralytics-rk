@@ -22,6 +22,7 @@ __all__ = (
     "C3TR",
     "C3Ghost",
     "C3Faster",
+    "C2fFaster",
     "GhostBottleneck",
     "Bottleneck",
     "BottleneckCSP",
@@ -294,13 +295,23 @@ class C3Ghost(C3):
 
 
 class C3Faster(C3):
-    """C3 module with GhostBottleneck()."""
+    """C3 module with FasterNetBlock()."""
 
     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
         """Initialize 'SPP' module with various pooling sizes for spatial pyramid pooling."""
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)  # hidden channels
         self.m = nn.Sequential(*(FasterNetBlock(c_, c_) for _ in range(n)))
+
+
+class C2fFaster(C2f):
+    """C2f module with FasterNetBlock()."""
+
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        """Initialize 'SPP' module with various pooling sizes for spatial pyramid pooling."""
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.c = int(c2 * e)  # hidden channels
+        self.m = nn.Sequential(*(FasterNetBlock(self.c, self.c) for _ in range(n)))
 
 
 class GhostBottleneck(nn.Module):
