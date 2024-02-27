@@ -337,18 +337,17 @@ class GhostBottleneck(nn.Module):
 class FasterNetBlock(nn.Module):    
     """FasterNet Block"""
 
-    def __init__(self, c1, c2, k=1, s=1):
+    def __init__(self, c1, c2, k=1, s=1, e=1.0):
         """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
         super().__init__()
+        # _c = int(c1 * e)
         self.conv = nn.Sequential(
             PConv3(c1, n_div=4),
-            nn.Conv2d(c1, c2, k, s, 0, bias=False),
-            nn.BatchNorm2d(c2),
-            nn.ReLU(),
-            nn.Conv2d(c2, c2, k, 1, 0, bias=False),
+            Conv(c1, c2, k, s, act=nn.ReLU()),
+            # nn.Conv2d(_c, c2, 1, 1, 0, bias=False),
         )
         self.shortcut = (
-            nn.Sequential(nn.Conv2d(c1, c2, 1, 1, bias=False)) if s == 2 else nn.Identity()
+            nn.Sequential(nn.Conv2d(c1, c1, 1, s, bias=False)) if s == 2 else nn.Identity()
         )
 
     def forward(self, x):

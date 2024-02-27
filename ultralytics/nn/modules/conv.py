@@ -184,7 +184,7 @@ class PConv(nn.Module):
         super().__init__()
         self.dim_conv = c1 // n_div
         self.dim_untouched = c1 - self.dim_conv
-        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, k, 1, 1, groups=g,bias=False)
+        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, k, 1, 1, groups=g, bias=False)
         self.cv2 = Conv(c1, c2, 1, s, act=act)
 
         if forward == 'slicing':
