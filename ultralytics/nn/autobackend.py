@@ -119,6 +119,7 @@ class AutoBackend(nn.Module):
             paddle,
             ncnn,
             triton,
+            rknn
         ) = self._model_type(w)
         fp16 &= pt or jit or onnx or xml or engine or nn_module or triton  # FP16
         nhwc = coreml or saved_model or pb or tflite or edgetpu  # BHWC formats (vs torch BCWH)
@@ -441,6 +442,8 @@ class AutoBackend(nn.Module):
                 mat_out = self.pyncnn.Mat()
                 ex.extract(output_name, mat_out)
                 y.append(np.array(mat_out)[None])
+        elif getattr(self, 'rknn', False):
+            assert "for inference, please refer to https://github.com/airockchip/rknn_model_zoo/"
         elif self.triton:  # NVIDIA Triton Inference Server
             im = im.cpu().numpy()  # torch to numpy
             y = self.model(im)
