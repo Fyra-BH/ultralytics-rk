@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv3
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv, PConv3
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -340,11 +340,10 @@ class FasterNetBlock(nn.Module):
     def __init__(self, c1, c2, k=1, s=1, e=1.0):
         """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
         super().__init__()
-        # _c = int(c1 * e)
+        c_ = int(c2 * e)
         self.conv = nn.Sequential(
-            PConv3(c1, n_div=4),
-            Conv(c1, c2, k, s, act=nn.ReLU()),
-            # nn.Conv2d(_c, c2, 1, 1, 0, bias=False),
+            PConv(c1, c_, n_div=4),
+            Conv(c_, c_, k, s, act=False),
         )
         self.shortcut = (
             nn.Sequential(nn.Conv2d(c1, c1, 1, s, bias=False)) if s == 2 else nn.Identity()
