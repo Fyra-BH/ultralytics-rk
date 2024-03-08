@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv, PConv3
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, PConv
 from .transformer import TransformerBlock
 
 __all__ = (
