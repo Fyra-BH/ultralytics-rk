@@ -179,12 +179,12 @@ class PConv(nn.Module):
     Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
     https://arxiv.org/pdf/2303.03667.pdf
     """
-    def __init__(self, c1, c2, k=3, s=1, n_div=4, g=1, act=True, forward="split_cat"):
+    def __init__(self, c1, c2, k=3, s=1, g=1, n_div=4, act=True, forward="split_cat"):
         """Initialize Conv layer with given arguments including activation."""
         super().__init__()
         self.dim_conv = c1 // n_div
         self.dim_untouched = c1 - self.dim_conv
-        self.cv1 = nn.Conv2d(self.dim_conv, self.dim_conv, k, 1, 1, groups=g, bias=False)
+        self.cv1 = Conv(self.dim_conv, self.dim_conv, k=3, act=None)
         self.cv2 = Conv(c1, c2, 1, s, act=act)
 
         if forward == 'slicing':
