@@ -23,6 +23,8 @@ __all__ = (
     "C3Ghost",
     "C3Faster",
     "C2fFaster",
+    "C2fMobile",
+    "C2fShuffle",
     "GhostBottleneck",
     "Bottleneck",
     "BottleneckCSP",
@@ -314,6 +316,26 @@ class C2fFaster(C2f):
         self.m = nn.Sequential(*(FasterNetBlock(self.c, self.c) for _ in range(n)))
 
 
+class C2fMobile(C2f):
+    """C2f module with MobileNetV2Block()."""
+
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        """Initialize 'SPP' module with various pooling sizes for spatial pyramid pooling."""
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.c = int(c2 * e)  # hidden channels
+        self.m = nn.Sequential(*(MobileNetV2Block(self.c, self.c, e=5.0) for _ in range(n)))
+    
+
+class C2fShuffle(C2f):
+    """C2f module with ShuffleNetV2Block()."""
+
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        """Initialize 'SPP' module with various pooling sizes for spatial pyramid pooling."""
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.c = int(c2 * e)  # hidden channels
+        self.m = nn.Sequential(*(ShuffleNetV2Block(self.c, self.c) for _ in range(n)))
+
+
 class GhostBottleneck(nn.Module):
     """Ghost Bottleneck https://github.com/huawei-noah/ghostnet."""
 
@@ -334,6 +356,7 @@ class GhostBottleneck(nn.Module):
         """Applies skip connection and concatenation to input tensor."""
         return self.conv(x) + self.shortcut(x)
 
+
 class FasterNetBlock(nn.Module):    
     """FasterNet Block"""
 
@@ -352,6 +375,79 @@ class FasterNetBlock(nn.Module):
     def forward(self, x):
         """Applies skip connection and concatenation to input tensor."""
         return self.conv(x) + self.shortcut(x)
+
+
+class MobileNetV2Block(nn.Module):
+    """MobileNetV2 bottleneck."""
+    
+    def __init__(self, c1, c2, k=3, s=1, e=6.0):
+        """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
+        super().__init__()
+        c_ = int(c1 * e)
+        self.conv = nn.Sequential(
+            Conv(c1, c_, k=1, s=1),
+            DWConv(c_, c_, k, s),
+            Conv(c_, c2, k=1, s=1, act=False)
+        )
+        self.shortcut = c1 == c2 and s == 1
+
+    def forward(self, x):
+        """Applies skip connection and concatenation to input tensor."""
+        return self.conv(x) + x if self.shortcut else self.conv(x)
+
+
+class ShuffleNetV2Block(nn.Module):    
+    """ShuffleNetV2 Block"""
+
+    def __init__(self, c1, c2, s=1):
+        """Initializes GhostBottleneck module with arguments ch_in, ch_out, kernel, stride."""
+        super().__init__()
+        c_ = c2 // 2
+        if s > 1:
+            self.branch1 = nn.Sequential(
+                Conv(c1, c1, 3, s, g=c1, act=False),
+                Conv(c1, c_, 1, 1)
+            )
+            self.branch2 = nn.Sequential(
+                Conv(c1, c_, 1, 1),
+                Conv(c_, c_, 3, s, g=c_, act=False),
+                Conv(c_, c_, 1, 1)
+            )
+        else:
+            self.branch1 = nn.Sequential(
+                nn.Identity()
+            )
+            self.branch2 = nn.Sequential(
+                Conv(c_, c_, 1),
+                Conv(c_, c_, 3, s, g=c_, act=False),
+                Conv(c_, c_, 1)
+            )
+        self.stride = s
+
+
+    def channel_shuffle(self, x, groups):
+        """Channel shuffle operation."""
+        batchsize, num_channels, height, width = x.size()
+        channels_per_group = num_channels // groups
+
+        # reshape
+        x = x.view(batchsize, groups, channels_per_group, height, width)
+
+        x = torch.transpose(x, 1, 2).contiguous()
+
+        # flatten
+        x = x.view(batchsize, num_channels, height, width)
+
+        return x
+
+    def forward(self, x):
+        if self.stride == 1:
+            x1, x2 = x.chunk(2, dim=1)
+            out = torch.cat((self.branch1(x1), self.branch2(x2)), dim=1)
+        else:
+            out = torch.cat((self.branch1(x), self.branch2(x)), dim=1)
+            
+        return self.channel_shuffle(out, 2)
 
 class Bottleneck(nn.Module):
     """Standard bottleneck."""
