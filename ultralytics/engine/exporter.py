@@ -340,14 +340,16 @@ class Exporter:
             ts.save(str(f), _extra_files=extra_files)
         return f, None
 
+
+
     @try_export # from https://github.com/airockchip/ultralytics_yolov8
     def export_rknn(self, prefix=colorstr('RKNN:')):
         """YOLOv8 RKNN model export."""
         LOGGER.info(f'\n{prefix} starting export with torch {torch.__version__}...')
 
-        # ts = torch.jit.trace(self.model, self.im, strict=False)
-        # f = str(self.file).replace(self.file.suffix, f'_rknnopt.torchscript')
-        # torch.jit.save(ts, str(f))
+        ts = torch.jit.trace(self.model, self.im, strict=False)
+        f = str(self.file).replace(self.file.suffix, f'_rknnopt.torchscript')
+        torch.jit.save(ts, str(f))
 
         f = str(self.file).replace(self.file.suffix, f'.onnx')
         opset_version = self.args.opset or get_latest_opset()
